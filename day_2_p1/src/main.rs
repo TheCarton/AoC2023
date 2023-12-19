@@ -1,26 +1,14 @@
 use nom::branch::alt;
 use nom::bytes::complete::{tag, take_till, take_while};
-use nom::character::complete::{line_ending, space0, space1, u32};
+use nom::character::complete::{space0, space1, u32};
 use nom::IResult;
 
-use nom::combinator::eof;
-use nom::multi::{fold_many0, many0, many1};
-use nom::sequence::{delimited, preceded, terminated, tuple};
+use nom::multi::many1;
+use nom::sequence::{delimited, terminated, tuple};
 
 fn main() {
-    debug_parse_game();
-}
-
-fn debug_parse_game() {
-    let s = "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green";
-    let r = game(s);
-    dbg!(r);
-}
-
-fn debug_parse_round() {
-    let s = "3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green";
-    let r = round(s);
-    dbg!(r);
+    let input = include_str!("../input.txt");
+    println!("{}", process(input));
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -42,24 +30,35 @@ struct Game {
 }
 
 fn process(input: &str) -> u32 {
-    todo!();
+    let (max_red, max_green, max_blue) = (12, 13, 14);
+    input
+        .lines()
+        .filter_map(|line| {
+            let (_, game) = parse_game(line).expect("valid game");
+            let valid_game = game.rounds.iter().all(|round| {
+                round.blocks.iter().all(|block| match block {
+                    Block::Red(r) => r <= &max_red,
+                    Block::Green(g) => g <= &max_green,
+                    Block::Blue(b) => b <= &max_blue,
+                })
+            });
+            if valid_game {
+                Some(game.id)
+            } else {
+                None
+            }
+        })
+        .sum()
 }
 
-// "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green";
-fn game(input: &str) -> IResult<&str, Game> {
+fn parse_game(input: &str) -> IResult<&str, Game> {
     let mut header_parser = delimited(tag("Game "), u32, tag(": "));
     let (game_string, id) = header_parser(input)?;
-    dbg!(game_string);
-    dbg!(id);
-    let (remaining, rounds) = many0(round)(game_string)?;
-    dbg!(&rounds);
+    let (remaining, rounds) = many1(round)(game_string)?;
     Ok((remaining, Game { id, rounds }))
 }
-// "3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green";
 
-// doesn't return error when it should
 fn round(input: &str) -> IResult<&str, Round> {
-    dbg!(input);
     let mut round_parser = terminated(
         take_till(|c| c == ';' || c == '\n'),
         take_while(|c| c == ';' || c == ' '),
@@ -67,7 +66,6 @@ fn round(input: &str) -> IResult<&str, Round> {
     let block_parser = delimited(space0, alt((red, blue, green)), alt((tag(","), tag(""))));
     let (remaining, round_string) = round_parser(input)?;
     let (_, blocks) = many1(block_parser)(round_string)?;
-    dbg!(&blocks);
     Ok((remaining, Round { blocks }))
 }
 
@@ -88,11 +86,51 @@ fn green(input: &str) -> IResult<&str, Block> {
 #[cfg(test)]
 #[test]
 fn example_1() {
-    let s = "
-Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green
+    let s = "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green
 Game 2: 1 blue, 2 green; 3 green, 4 blue, 1 red; 1 green, 1 blue
 Game 3: 8 green, 6 blue, 20 red; 5 blue, 4 red, 13 green; 5 green, 1 red
 Game 4: 1 green, 3 red, 6 blue; 3 green, 6 red; 3 green, 15 blue, 14 red
 Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green";
     assert_eq!(process(s), 8);
+}
+
+#[cfg(test)]
+#[test]
+fn part_1() {
+    let s = include_str!("../input.txt");
+    assert_eq!(process(s), 2551);
+}
+#[test]
+fn debug_parse_input() {
+    let s = include_str!("../input.txt");
+    for l in s.lines() {
+        let g = parse_game(l);
+        dbg!(g);
+    }
+}
+
+#[test]
+fn debug_parse_example() {
+    let s = "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green
+Game 2: 1 blue, 2 green; 3 green, 4 blue, 1 red; 1 green, 1 blue
+Game 3: 8 green, 6 blue, 20 red; 5 blue, 4 red, 13 green; 5 green, 1 red
+Game 4: 1 green, 3 red, 6 blue; 3 green, 6 red; 3 green, 15 blue, 14 red
+Game 5: 6 red, 1 blue, 3 green; 2 blue, 1 red, 2 green";
+    for l in s.lines() {
+        let g = parse_game(l);
+        dbg!(g);
+    }
+}
+
+#[test]
+fn debug_parse_game() {
+    let s = "Game 1: 3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green";
+    let r = parse_game(s);
+    dbg!(r);
+}
+
+#[test]
+fn debug_parse_round() {
+    let s = "3 blue, 4 red; 1 red, 2 green, 6 blue; 2 green";
+    let r = round(s);
 }
