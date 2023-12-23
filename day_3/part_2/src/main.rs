@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use glam::IVec2;
 
 use nom::{
@@ -53,6 +55,15 @@ impl<'a> Diagram<'a> {
             None
         }
     }
+    fn get_mut(&mut self, pos: IVec2) -> Option<&mut DiagramChar> {
+        let valid_x = pos.x >= 0 && pos.x < self.rows.first().unwrap().len() as i32;
+        let valid_y = pos.y >= 0 && pos.y < self.rows.len() as i32;
+        if valid_x && valid_y {
+            Some(&mut self.rows[pos.y as usize][pos.x as usize])
+        } else {
+            None
+        }
+    }
 }
 
 fn parse_number<'a>(s: Span<'a>) -> IResult<Span, Number<'a>> {
@@ -76,12 +87,12 @@ fn parse_row(input: &str) -> IResult<&str, Vec<DiagramChar>> {
 }
 
 fn parse_symbol(input: &str) -> IResult<&str, DiagramChar> {
-    let (input, _) = none_of(".0123456789")(input)?;
+    let (input, _) = one_of("*")(input)?;
     Ok((input, DiagramChar::Symbol))
 }
 
 fn parse_dot(input: &str) -> IResult<&str, DiagramChar> {
-    let (input, _) = one_of(".")(input)?;
+    let (input, _) = none_of("*0123456789")(input)?;
     Ok((input, DiagramChar::Nothing))
 }
 
@@ -90,12 +101,22 @@ fn parse_digit(input: &str) -> IResult<&str, DiagramChar> {
     Ok((input, DiagramChar::Digit))
 }
 
+struct SymbolTuple {
+    adjacent_n: u8,
+    ratio: u32,
+}
+
+impl SymbolTuple {
+    fn new(adjacent_n: u8, ratio: u32) -> SymbolTuple {
+        SymbolTuple { adjacent_n, ratio }
+    }
+}
+
 fn process(input: &str) -> u32 {
     let (_, diagram) = parse_diagram(input).expect("valid input");
-    diagram
-        .numbers
-        .iter()
-        .filter_map(|num| {
+    let adj_map = diagram.numbers.iter().fold(
+        HashMap::new(),
+        |mut adj_map: HashMap<IVec2, SymbolTuple>, num| {
             let start_pos = num.xy();
             let end_pos = num.xy() + IVec2::new(num.n_str.len() as i32 - 1, 0);
 
@@ -106,16 +127,30 @@ fn process(input: &str) -> u32 {
 
             let north_border = (start_pos.x..=end_pos.x).map(|x| IVec2::new(x, start_pos.y - 1));
             let south_border = (start_pos.x..=end_pos.x).map(|x| IVec2::new(x, start_pos.y + 1));
-            let is_part_number = north_border
+            north_border
                 .chain(south_border.chain(east_border.chain(west_border)))
-                .any(|border_v| {
-                    diagram
+                .for_each(|border_v| {
+                    if diagram
                         .get(border_v)
                         .is_some_and(|c| c == DiagramChar::Symbol)
+                    {
+                        let part_number = num.n_str.parse::<u32>().unwrap();
+                        if let Some(s_tuple) = adj_map.get_mut(&border_v) {
+                            s_tuple.adjacent_n += 1;
+                            s_tuple.ratio *= part_number;
+                        } else {
+                            adj_map.insert(border_v, SymbolTuple::new(1, part_number));
+                        }
+                    }
                 });
-
-            if is_part_number {
-                Some(num.n_str.parse::<u32>().unwrap())
+            adj_map
+        },
+    );
+    adj_map
+        .into_values()
+        .filter_map(|s_tuple| {
+            if s_tuple.adjacent_n == 2 {
+                Some(s_tuple.ratio)
             } else {
                 None
             }
@@ -136,27 +171,5 @@ fn example_1() {
 ......755.
 ...$.*....
 .664.598..";
-    assert_eq!(4361, process(s));
-}
-
-#[ignore]
-#[cfg(test)]
-#[test]
-fn test_parse_number() {
-    let str = "..35..633.";
-
-    let (s, n) = parse_number(str.into()).unwrap();
-    assert_eq!(n.xy(), IVec2::new(2, 0));
-    assert_eq!(n.n_str.parse::<i32>().unwrap(), 35);
-
-    let (_s2, n2) = parse_number(s.into()).unwrap();
-    assert_eq!(n2.xy(), IVec2::new(6, 0));
-    assert_eq!(n2.n_str.parse::<i32>().unwrap(), 633);
-}
-
-#[cfg(test)]
-#[test]
-fn part_1_test() {
-    let s = include_str!("../input.txt");
-    assert_eq!(543867, process(s));
+    assert_eq!(467835, process(s));
 }
