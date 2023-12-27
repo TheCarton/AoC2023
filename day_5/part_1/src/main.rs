@@ -6,12 +6,19 @@ use nom::{
     character::complete::{digit1, newline, space0, space1},
     combinator::map_res,
     multi::{many1, separated_list1},
-    sequence::{delimited, preceded, terminated},
+    sequence::{delimited, terminated},
     IResult,
 };
 
 fn main() {
-    dbg!(parse_almanac(EXAMPLE));
+    let s = include_str!("../input.txt");
+    println!("{}", process(s));
+}
+
+#[derive(Debug)]
+struct Almanac {
+    map_tables: Vec<MapTable>,
+    seeds: Vec<usize>,
 }
 
 #[derive(Debug)]
@@ -25,14 +32,35 @@ struct MapTable {
     mappings: Vec<MapLine>,
 }
 
-#[derive(Debug)]
-struct Almanac {
-    map_tables: Vec<MapTable>,
-    seeds: Vec<usize>,
+impl MapTable {
+    fn dest(&self, source_id: usize) -> usize {
+        let matched_map_line = self.mappings.iter().find(|m| m.source.contains(&source_id));
+        if let Some(map_line) = matched_map_line {
+            let offset = source_id - map_line.source.start;
+            map_line.dest.start + offset
+        } else {
+            source_id
+        }
+    }
+}
+
+fn process(input: &str) -> usize {
+    let (_, almanac) = parse_almanac(input).unwrap();
+    almanac
+        .seeds
+        .iter()
+        .map(|seed| {
+            almanac
+                .map_tables
+                .iter()
+                // why do I need to clone here?
+                .fold(seed.clone(), |acc, map_table| map_table.dest(acc))
+        })
+        .min()
+        .unwrap()
 }
 
 fn parse_almanac(input: &str) -> IResult<&str, Almanac> {
-    let mut table_parser = delimited(newline, parse_map_table, alt((tag("\n"), tag(""))));
     let (input, _) = terminated(
         take_till1(|c| c == ':'),
         take_while(|c| c == ':' || c == ' '),
@@ -42,10 +70,10 @@ fn parse_almanac(input: &str) -> IResult<&str, Almanac> {
     Ok((input, Almanac { map_tables, seeds }))
 }
 
-// 50 98 2\n    52 50 48
 fn parse_map_table(input: &str) -> IResult<&str, MapTable> {
-    let (input, _) = take_till1(|c| c == ':')(input)?;
     let line_parser = delimited(space0, parse_map_line, alt((tag("\n"), tag(""))));
+
+    let (input, _) = take_till1(|c| c == ':')(input)?;
     let (input, _) = tag(":")(input)?;
     let (input, _) = newline(input)?;
     let (input, mappings) = many1(line_parser)(input)?;
@@ -67,7 +95,10 @@ fn parse_usize(input: &str) -> IResult<&str, usize> {
     map_res(digit1, |s_var: &str| s_var.parse::<usize>())(input)
 }
 
-const EXAMPLE: &str = "seeds: 79 14 55 13
+#[cfg(test)]
+#[test]
+fn example() {
+    let s = "seeds: 79 14 55 13
 
 seed-to-soil map:
 50 98 2
@@ -100,3 +131,12 @@ temperature-to-humidity map:
 humidity-to-location map:
 60 56 37
 56 93 4";
+    assert_eq!(process(s), 35);
+}
+
+#[cfg(test)]
+#[test]
+fn part_1() {
+    let s = include_str!("../input.txt");
+    assert_eq!(process(s), 177942185);
+}
