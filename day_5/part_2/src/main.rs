@@ -11,41 +11,8 @@ use nom::{
 };
 
 fn main() {
-    let e = "seeds: 79 14 55 13
-
-seed-to-soil map:
-50 98 2
-52 50 48
-
-soil-to-fertilizer map:
-0 15 37
-37 52 2
-39 0 15
-
-fertilizer-to-water map:
-49 53 8
-0 11 42
-42 0 7
-57 7 4
-
-water-to-light map:
-88 18 7
-18 25 70
-
-light-to-temperature map:
-45 77 23
-81 45 19
-68 64 13
-
-temperature-to-humidity map:
-0 69 1
-1 0 69
-
-humidity-to-location map:
-60 56 37
-56 93 4";
     let s = include_str!("../input.txt");
-    println!("{}", process(e));
+    println!("{}", process(s));
 }
 
 #[derive(Debug)]
@@ -85,7 +52,7 @@ fn range_relation(seed_range: &Range<usize>, source_range: &Range<usize>) -> Ran
         RangeRelation::EqualRanges
     } else if source_range.contains(&seed_range.start) && source_range.contains(&seed_range.end) {
         RangeRelation::SeedsAreProperSubset
-    } else if seed_range.contains(&source_range.start) && seed_range.contains(&source_range.end) {
+    } else if seed_range.contains(&source_range.start) && seed_range.contains(&source_range.start) {
         RangeRelation::SourceIsProperSubset
     } else if source_range.contains(&seed_range.end) {
         RangeRelation::IntersectionSeedsLeft
@@ -94,12 +61,11 @@ fn range_relation(seed_range: &Range<usize>, source_range: &Range<usize>) -> Ran
     }
 }
 
-fn map_seed_with_map_line(seed_range: &Range<usize>, map_line: &MapLine) -> Range<usize> {
+fn map_seed_with_map_line(matched_seed_range: &Range<usize>, map_line: &MapLine) -> Range<usize> {
+    dbg!(&matched_seed_range);
     let offset = map_line.dest.start as i64 - map_line.source.start as i64;
-    let new_start = (seed_range.start as i64 + offset) as usize;
-    let new_end = (seed_range.end as i64 + offset) as usize;
-    let r = new_start..new_end;
-    dbg!(r);
+    let new_start = (matched_seed_range.start as i64 + offset) as usize;
+    let new_end = (matched_seed_range.end as i64 + offset) as usize;
     new_start..new_end
 }
 
@@ -109,76 +75,91 @@ fn map_seed_with_map_line(seed_range: &Range<usize>, map_line: &MapLine) -> Rang
 // seed 79 goes to 81, seed 92 goes to 94
 // seed 82 goes to soil 84
 fn map_seeds(mut seed_ranges: Vec<Range<usize>>, map_table: &MapTable) -> Vec<Range<usize>> {
+    fn push_non_empty(r: Range<usize>, ranges: &mut Vec<Range<usize>>) {
+        if !r.is_empty() {
+            ranges.push(r);
+        }
+    }
     let mut dest_seeds = Vec::new();
     while let Some(seed_range) = seed_ranges.pop() {
-        dbg!(&seed_range);
         let mut seed_range_matched_a_source = false;
+        dbg!(&seed_ranges);
+        dbg!(&dest_seeds);
+
         for map_line in map_table.mappings.iter() {
-            dbg!(map_line);
             match range_relation(&seed_range, &map_line.source) {
                 RangeRelation::Disjoint => {
+                    dbg!(&seed_range);
+                    dbg!(map_line);
                     dbg!("disjoint");
                 }
                 RangeRelation::EqualRanges => {
+                    dbg!(&seed_range);
+                    dbg!(map_line);
+                    dbg!("equal ranges");
                     seed_range_matched_a_source = true;
-                    dbg!("equal");
                     dest_seeds.push(map_line.dest.clone())
                 }
                 RangeRelation::SeedsAreProperSubset => {
+                    dbg!(&seed_range);
+                    dbg!(map_line);
                     dbg!("seeds are proper subset");
                     seed_range_matched_a_source = true;
                     let new_dest_seed = map_seed_with_map_line(&seed_range, &map_line);
+                    dbg!(&new_dest_seed);
                     dest_seeds.push(new_dest_seed);
                 }
                 RangeRelation::SourceIsProperSubset => {
+                    dbg!(&seed_range);
+                    dbg!(map_line);
                     dbg!("source is proper subset");
                     seed_range_matched_a_source = true;
                     let left_remainder = seed_range.start..map_line.source.start;
-                    dbg!(&left_remainder);
                     let right_remainder = map_line.source.end..seed_range.end;
-                    dbg!(&right_remainder);
+                    push_non_empty(left_remainder, &mut seed_ranges);
+                    push_non_empty(right_remainder, &mut seed_ranges);
+                    let new_dest_seed = map_line.dest.clone();
+                    dbg!(&new_dest_seed);
 
-                    if !left_remainder.is_empty() {
-                        seed_ranges.push(left_remainder);
-                    }
-
-                    if !right_remainder.is_empty() {
-                        seed_ranges.push(right_remainder);
-                    }
-
-                    dest_seeds.push(map_line.dest.clone());
+                    dest_seeds.push(new_dest_seed);
                 }
                 RangeRelation::IntersectionSeedsLeft => {
-                    dbg!("intersect left");
+                    dbg!(&seed_range);
+                    dbg!(map_line);
+                    dbg!("intersect seeds left");
                     seed_range_matched_a_source = true;
                     let remainder = seed_range.start..map_line.source.start;
                     dbg!(&remainder);
-                    if !remainder.is_empty() {
-                        seed_ranges.push(remainder);
-                    }
+                    push_non_empty(remainder, &mut seed_ranges);
 
-                    let new_dest_seed = map_seed_with_map_line(&seed_range, &map_line);
+                    let matched_seed_range = map_line.source.start..seed_range.end;
+                    let new_dest_seed = map_seed_with_map_line(&matched_seed_range, &map_line);
+                    dbg!(&new_dest_seed);
                     dest_seeds.push(new_dest_seed);
                 }
                 RangeRelation::IntersectionSeedsRight => {
-                    dbg!("intersect right");
+                    dbg!(&seed_range);
+                    dbg!(map_line);
+                    dbg!("itersect seeds right");
                     seed_range_matched_a_source = true;
                     let remainder = map_line.source.end..seed_range.end;
                     dbg!(&remainder);
-                    if !remainder.is_empty() {
-                        seed_ranges.push(remainder);
-                    }
+                    push_non_empty(remainder, &mut seed_ranges);
 
-                    let new_dest_seed = map_seed_with_map_line(&seed_range, &map_line);
+                    let matched_seed_range = seed_range.start..map_line.source.end;
+                    let new_dest_seed = map_seed_with_map_line(&matched_seed_range, &map_line);
+                    dbg!(&new_dest_seed);
                     dest_seeds.push(new_dest_seed);
                 }
             }
         }
         if !seed_range_matched_a_source {
+            dbg!(&seed_range);
+            dbg!("no seed match!");
+            dbg!(map_table);
             dest_seeds.push(seed_range.clone());
         }
     }
-    dbg!(&dest_seeds);
     dest_seeds
 }
 
@@ -192,7 +173,7 @@ fn process(input: &str) -> usize {
             dbg!(&acc);
             acc
         });
-    println!("{:?}", seeds);
+    dbg!(&seeds);
     seeds
         .iter()
         .map(|seed_range| seed_range.start)
