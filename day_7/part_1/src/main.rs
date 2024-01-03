@@ -23,6 +23,29 @@ fn process(input: &str) -> u32 {
         .sum()
 }
 
+#[derive(Debug, Eq)]
+struct HandTuple {
+    hand: Hand,
+    bid: u32,
+}
+
+impl Ord for HandTuple {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.hand.cmp(&other.hand)
+    }
+}
+
+impl PartialOrd for HandTuple {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for HandTuple {
+    fn eq(&self, other: &Self) -> bool {
+        self.hand == other.hand
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq)]
 enum Card {
     Two,
@@ -78,7 +101,7 @@ fn strongest_hand_type(cards: &[Card; 5]) -> HandType {
         })
         .max()
         .expect("hand not empty");
-    let n_unique = cards
+    let number_unique_cards = cards
         .iter()
         .enumerate()
         .filter(|(card_id, &card)| {
@@ -91,61 +114,38 @@ fn strongest_hand_type(cards: &[Card; 5]) -> HandType {
             card_is_unique
         })
         .count();
-    let hand_type = if n_of_a_kind == 5 {
-        assert!(n_unique == 0);
-        HandType::FiveOfAKind
-    } else if n_of_a_kind == 4 {
-        assert!(n_unique == 1);
-        HandType::FourOfAKind
-    } else if n_of_a_kind == 3 && n_unique == 0 {
-        HandType::FullHouse
-    } else if n_of_a_kind == 3 {
-        assert!(n_unique <= 3);
-        HandType::ThreeOfAKind
-    } else if n_unique == 1 {
-        HandType::TwoPair
-    } else if n_unique == 3 {
-        HandType::OnePair
-    } else {
-        assert!(n_unique == 5);
-        HandType::HighCard
-    };
-    hand_type
+
+    match (n_of_a_kind, number_unique_cards) {
+        (5, _) => HandType::FiveOfAKind,
+        (4, _) => HandType::FourOfAKind,
+        (3, 0) => HandType::FullHouse,
+        (3, _) => HandType::ThreeOfAKind,
+        (2, 1) => HandType::TwoPair,
+        (2, 3) => HandType::OnePair,
+        (_, 5) => HandType::HighCard,
+        _ => unreachable!(),
+    }
 }
-// 32T3K
+
 fn parse_card(input: &str) -> IResult<&str, Card> {
-    let parse_two = map(tag("2"), |_| Card::Two);
-    let parse_three = map(tag("3"), |_| Card::Three);
-    let parse_four = map(tag("4"), |_| Card::Four);
-    let parse_five = map(tag("5"), |_| Card::Five);
-    let parse_six = map(tag("6"), |_| Card::Six);
-    let parse_seven = map(tag("7"), |_| Card::Seven);
-    let parse_eight = map(tag("8"), |_| Card::Eight);
-    let parse_nine = map(tag("9"), |_| Card::Nine);
-    let parse_ten = map(tag("T"), |_| Card::Ten);
-    let parse_jack = map(tag("J"), |_| Card::Jack);
-    let parse_queen = map(tag("Q"), |_| Card::Queen);
-    let parse_king = map(tag("K"), |_| Card::King);
-    let parse_ace = map(tag("A"), |_| Card::Ace);
     let (input, c) = alt((
-        parse_two,
-        parse_three,
-        parse_four,
-        parse_five,
-        parse_six,
-        parse_seven,
-        parse_eight,
-        parse_nine,
-        parse_ten,
-        parse_jack,
-        parse_queen,
-        parse_king,
-        parse_ace,
+        map(tag("2"), |_| Card::Two),
+        map(tag("3"), |_| Card::Three),
+        map(tag("4"), |_| Card::Four),
+        map(tag("5"), |_| Card::Five),
+        map(tag("6"), |_| Card::Six),
+        map(tag("7"), |_| Card::Seven),
+        map(tag("8"), |_| Card::Eight),
+        map(tag("9"), |_| Card::Nine),
+        map(tag("T"), |_| Card::Ten),
+        map(tag("J"), |_| Card::Jack),
+        map(tag("Q"), |_| Card::Queen),
+        map(tag("K"), |_| Card::King),
+        map(tag("A"), |_| Card::Ace),
     ))(input)?;
     Ok((input, c))
 }
 
-// 32T3K
 fn parse_hand(input: &str) -> IResult<&str, Hand> {
     struct CardWrapper {
         cards: [Card; 5],
@@ -183,29 +183,6 @@ fn parse_hand_tuples(input: &str) -> IResult<&str, Vec<HandTuple>> {
     separated_list1(newline, parse_hand_tuple)(input)
 }
 
-#[derive(Debug, Eq)]
-struct HandTuple {
-    hand: Hand,
-    bid: u32,
-}
-
-impl Ord for HandTuple {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.hand.cmp(&other.hand)
-    }
-}
-
-impl PartialOrd for HandTuple {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl PartialEq for HandTuple {
-    fn eq(&self, other: &Self) -> bool {
-        self.hand == other.hand
-    }
-}
 #[cfg(test)]
 #[test]
 fn example() {
@@ -216,4 +193,10 @@ KTJJT 220
 QQQJA 483";
 
     assert_eq!(process(s), 6440);
+}
+
+#[test]
+fn part_1() {
+    let s = include_str!("../input.txt");
+    assert_eq!(process(s), 251121738);
 }
