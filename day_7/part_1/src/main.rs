@@ -128,7 +128,7 @@ fn strongest_hand_type(cards: &[Card; 5]) -> HandType {
 }
 
 fn parse_card(input: &str) -> IResult<&str, Card> {
-    let (input, c) = alt((
+    alt((
         map(tag("2"), |_| Card::Two),
         map(tag("3"), |_| Card::Three),
         map(tag("4"), |_| Card::Four),
@@ -142,8 +142,7 @@ fn parse_card(input: &str) -> IResult<&str, Card> {
         map(tag("Q"), |_| Card::Queen),
         map(tag("K"), |_| Card::King),
         map(tag("A"), |_| Card::Ace),
-    ))(input)?;
-    Ok((input, c))
+    ))(input)
 }
 
 fn parse_hand(input: &str) -> IResult<&str, Hand> {
